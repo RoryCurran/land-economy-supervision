@@ -39,4 +39,4 @@
   - First drafts of `question.md`, `sources.md`, `analysis.md`, `outputs.md` and this file.
   - The script `code/hme_elasticities.py`, first tested on synthetic data, then extended to read the Nomis table format and run on the real data.
   - A first run of the results, including the London-excluded check.
-- **Checks or changes:** [fill in: what you checked, edited or rejected, e.g. confirming the Nomis menu labels and API link, the spotlight SIC codes, the results on real data, and your own interpretation in report.md.]
+- **Checks or changes:** Confirmation of methodology used by the software; also made sure to interpret any findings from the model myself.
