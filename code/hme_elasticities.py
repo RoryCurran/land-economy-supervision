@@ -23,11 +23,13 @@ than dropping them as a log-log OLS would. Log-log OLS on non-zero regions is
 reported alongside as a check.
 
 Usage (from the repo root):
-    python code/hme_elasticities.py data/raw/bres_ttwa_4digit.csv outputs/ttwa
+    python code/hme_elasticities.py data/raw/bres_ttwa_4digit_2024.csv outputs/ttwa
+    # robustness: drop named regions (comma-separated), e.g. London
+    python code/hme_elasticities.py data/raw/bres_ttwa_4digit_2024.csv outputs/ttwa_exlondon London
 
-Input: a Nomis API CSV in long format with (at least) the columns
-GEOGRAPHY_CODE, GEOGRAPHY_NAME, INDUSTRY_NAME and OBS_VALUE, one year, one
-measure. See sources.md for the exact download.
+Input: either the wide "table" CSV from the Nomis web query tool (the
+Employment block is used) or a long-format Nomis API CSV with GEOGRAPHY_CODE,
+INDUSTRY_NAME and OBS_VALUE. See sources.md for the exact download.
 """
 
 import re
@@ -64,9 +66,65 @@ GROUP_COLOURS = {"local": "#4C78A8", "health": "#B279A2", "tradable": "#E45756"}
 MIN_NATIONAL_EMP = 2000  # skip tiny industries: too noisy after Nomis rounding
 
 
+EMPLOYMENT_STATUS = "Employment"  # employees + working owners; see sources.md
+
+
+def load_nomis_wide(path: Path):
+    """Read the 'table' CSV that the Nomis web query tool downloads.
+
+    That file holds one or more blocks, each headed by metadata lines
+    (e.g. "Employment status:","Employment") and then a header row
+    "Industry", <region>, "", <region>, "", ... where every value column is
+    followed by a flag column. Missing values are "-". We keep the block whose
+    employment status matches EMPLOYMENT_STATUS.
+    """
+    import csv
+    with open(path, encoding="utf-8-sig") as fh:
+        rows = list(csv.reader(fh))
+    status, blocks = None, {}
+    i = 0
+    while i < len(rows):
+        r = rows[i]
+        if r and r[0].startswith("Employment status"):
+            status = r[1].strip()
+        if r and r[0] == "Industry":
+            regions = r[1::2]
+            records = []
+            i += 1
+            while i < len(rows) and not rows[i]:  # blank line after header
+                i += 1
+            while i < len(rows) and rows[i] and re.match(r"^\d{4} :", rows[i][0]):
+                records.append([rows[i][0]] + rows[i][1::2])
+                i += 1
+            blocks[status] = (regions, records)
+            continue
+        i += 1
+    if EMPLOYMENT_STATUS not in blocks:
+        sys.exit(f"No '{EMPLOYMENT_STATUS}' table found; tables present: "
+                 f"{list(blocks)}")
+    regions, records = blocks[EMPLOYMENT_STATUS]
+    wide = pd.DataFrame(records, columns=["INDUSTRY_NAME"] + regions)
+    df = wide.melt(id_vars="INDUSTRY_NAME", var_name="GEOGRAPHY_CODE",
+                   value_name="OBS_VALUE")
+    # Industries with any missing ("-") cell are dropped, not zero-filled.
+    bad = df.loc[df["OBS_VALUE"].str.strip() == "-", "INDUSTRY_NAME"].unique()
+    if len(bad):
+        print(f"Dropping {len(bad)} industries with missing values: "
+              + "; ".join(bad))
+    df = df[~df["INDUSTRY_NAME"].isin(bad)]
+    df["GEOGRAPHY_NAME"] = df["GEOGRAPHY_CODE"]
+    return df
+
+
 def load_nomis(path: Path) -> pd.DataFrame:
-    """Read a long-format Nomis CSV and return a region x industry matrix."""
-    df = pd.read_csv(path)
+    """Read a Nomis CSV (long API format or wide web-table format) and return
+    a region x industry matrix."""
+    with open(path, encoding="utf-8-sig") as fh:
+        first = fh.readline()
+    if "GEOGRAPHY_CODE" in first.upper():
+        df = pd.read_csv(path)
+    else:
+        df = load_nomis_wide(path)
     df.columns = [c.upper() for c in df.columns]
     needed = {"GEOGRAPHY_CODE", "GEOGRAPHY_NAME", "INDUSTRY_NAME", "OBS_VALUE"}
     missing = needed - set(df.columns)
@@ -154,27 +212,37 @@ def fig_spotlight(res: pd.DataFrame, path: Path) -> None:
 
 
 def fig_all(res: pd.DataFrame, path: Path) -> None:
+    """Every industry: elasticity against national size, goods vs services."""
+    services = res["sic4"].str[:2].astype(int) >= 45
     fig, ax = plt.subplots(figsize=(7, 4.5))
-    ax.scatter(np.log10(res["national_emp"]), res["b_ppml"], s=10,
-               color="0.65", alpha=0.6, lw=0)
+    for mask, colour, label in [(~services, "0.75", "Goods & primary (SIC 01-43)"),
+                                (services, "0.35", "Services (SIC 45-99)")]:
+        ax.scatter(np.log10(res.loc[mask, "national_emp"]),
+                   res.loc[mask, "b_ppml"], s=10, color=colour, alpha=0.7,
+                   lw=0, label=label)
     s = res[res["sic4"].isin(SPOTLIGHT)]
     for _, r in s.iterrows():
-        label, group = SPOTLIGHT[r["sic4"]]
-        ax.scatter(np.log10(r["national_emp"]), r["b_ppml"], s=28,
-                   color=GROUP_COLOURS[group], zorder=3)
-        ax.annotate(label, (np.log10(r["national_emp"]), r["b_ppml"]),
-                    fontsize=7, xytext=(4, 2), textcoords="offset points")
+        ax.scatter(np.log10(r["national_emp"]), r["b_ppml"], s=30, zorder=3,
+                   color=GROUP_COLOURS[SPOTLIGHT[r["sic4"]][1]])
     ax.axhline(1, color="0.3", ls="--", lw=1)
     ax.set_xlabel("National employment in industry (log10)")
     ax.set_ylabel("Elasticity to region size (PPML)")
+    ax.legend(frameon=False, fontsize=8, loc="lower left")
     ax.spines[["top", "right"]].set_visible(False)
     fig.tight_layout()
     fig.savefig(path, dpi=200)
     plt.close(fig)
 
 
-def main(infile: str, outprefix: str) -> None:
+def main(infile: str, outprefix: str, exclude: str = "") -> None:
     emp, names = load_nomis(Path(infile))
+    if exclude:
+        drop = [r.strip() for r in exclude.split(",")]
+        unknown = set(drop) - set(emp.index)
+        if unknown:
+            sys.exit(f"Regions not found: {unknown}")
+        emp = emp.drop(index=drop)
+        print(f"Excluding regions: {drop}")
     print(f"{emp.shape[0]} regions x {emp.shape[1]} industries, "
           f"{emp.values.sum():,.0f} jobs in total")
     res = estimate(emp, names)
@@ -189,6 +257,10 @@ def main(infile: str, outprefix: str) -> None:
     print(f"  significantly above 1: {res['sig_above_1'].sum()}")
     print(f"  significantly below 1: {res['sig_below_1'].sum()}")
     print(f"Spearman(log national employment, b): {rho:.2f} (p = {p:.3g})")
+    services = res["sic4"].str[:2].astype(int) >= 45
+    for lab, m in [("goods & primary", ~services), ("services", services)]:
+        r_, p_ = spearmanr(np.log(res.loc[m, "national_emp"]), res.loc[m, "b_ppml"])
+        print(f"  within {lab} ({m.sum()} industries): {r_:.2f} (p = {p_:.3g})")
     cols = ["sic4", "industry", "b_ppml", "ci_low", "ci_high", "b_ols_nonzero"]
     spot = res[res["sic4"].isin(SPOTLIGHT)][cols]
     print("\nSpotlight industries:\n" + spot.to_string(index=False,
@@ -200,6 +272,6 @@ def main(infile: str, outprefix: str) -> None:
 
 
 if __name__ == "__main__":
-    if len(sys.argv) != 3:
+    if len(sys.argv) not in (3, 4):
         sys.exit(__doc__)
-    main(sys.argv[1], sys.argv[2])
+    main(*sys.argv[1:])
