@@ -1,11 +1,11 @@
 # Question
 
-- **Question:** Do larger functional regions in Great Britain hold a more-than-proportional share of jobs in tradable, increasing-returns industries, and only a proportional share of jobs in local services? In other words, is there a home market effect in British employment?
+- **Question:** Is there a home market effect in British employment?
 
 - **Theory or mechanism:**
   - The home market effect (Krugman 1980; Lectures 3–4). With increasing returns and positive trade costs, a region with share θ > ½ of demand attracts a share λ* > θ of firms in the increasing-returns sector. The larger market is a net exporter of that sector's output. Firms concentrate production where demand is large and serve smaller markets by trade, because a fixed cost makes many small plants uneconomic.
-  - Local services such as hairdressing, GP practices and primary schools are effectively untradable: they are consumed where they are produced. They should therefore scale one-for-one with their local market.
-  - Dingel et al. (2026 draft; Lectures 3–4) find that the effect is stronger for rarer, more specialised services. Rarer means a higher fixed cost relative to local demand, so more is gained by concentrating production.
+  - Local services such as hairdressing, GP practices and primary schools are effectively untradable: they are consumed where they are produced. They should therefore scale one-for-one with their local market. 
+  - Dingel et al. (2026 draft; Lectures 3–4) find that the effect is stronger for specialised services such as healthcare. Rarer means a higher fixed cost relative to local demand, so more is gained by concentrating production.
 
 - **Expected pattern:** Across regions, estimate the elasticity *b* of each industry's employment with respect to region size.
   - *b* ≈ 1 for local services.
