@@ -21,10 +21,6 @@
   - BRES is a sample survey, so every figure carries sampling error.
 - **Access / reuse terms:** Open Government Licence v3.0. ONS Crown Copyright.
 
-## Dataset 2 (robustness): resident population by TTWA
-
-- [To add: ONS mid-year population estimates or Census 2021 usual residents. If Nomis does not offer TTWA geography directly, aggregate LSOA figures to TTWAs using the ONS LSOA→TTWA lookup from the Open Geography Portal. Record the lookup file and its version here.]
-
 ## Literature (from lectures)
 
 - Krugman, P. (1980). Scale economies, product differentiation, and the pattern of trade. *American Economic Review*, 70(5), 950–959.
